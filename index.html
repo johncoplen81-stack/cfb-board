@@ -1,0 +1,1137 @@
+<!DOCTYPE html><script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Cfb 2026 Predictions Board",
+  "schemaVersion": 1,
+  "description": "2026 college football predictions board — preseason futures (win totals, Heisman, title), Week 0 game slate with spreads/totals, per-pick commissioner locks with 💰 bet + stake designation, and a History & Standings tab tracking every player's record and betting P/L. Bake locks/results via update_artifact (LOCKED/RESULTS objects).",
+  "mcpTools": [],
+  "mcpServerNames": []
+}
+</script>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 CFB Preseason Predictions Board</title>
+<style>
+  :root{
+    --bg:#071120; --panel:#0e1c33; --panel2:#14264a; --line:#22385f;
+    --ink:#eef3fa; --muted:#96a8c8; --faint:#60739a;
+    --accent:#d50a0a;      /* NFL red */
+    --navy:#013369;        /* NFL shield navy */
+    --over:#35c759; --under:#ff453a; --gold:#ffb612; --value:#8ab4ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.45;padding:0 0 60px}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 18px}
+  body::before{content:'';display:block;height:5px;background:linear-gradient(90deg,var(--navy) 0 50%,var(--accent) 50% 100%)}
+  header{border-bottom:3px solid var(--accent);background:linear-gradient(180deg,#0b1b36,#071120),radial-gradient(900px 220px at 20% -40%,#16305e99,transparent);padding:24px 0 16px}
+  h1{font-size:25px;letter-spacing:-.4px}
+  .sub{color:var(--muted);font-size:13.5px;margin-top:5px}
+  .meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--faint)}
+  .meta b{color:var(--muted);font-weight:600}
+
+  /* deadline banner */
+  .deadline{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(90deg,#241d0b,#1a1508);
+    border:1px solid #4a3a12;border-radius:12px;padding:13px 16px;margin:16px 0 4px}
+  .deadline.closed{background:linear-gradient(90deg,#2a1212,#1a0b0b);border-color:#5a2020}
+  .dl-label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--gold);font-weight:700}
+  .deadline.closed .dl-label{color:#ff9b9b}
+  .dl-time{font-size:14px;font-weight:600}
+  .dl-count{margin-left:auto;font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;color:var(--gold)}
+  .deadline.closed .dl-count{color:#ff9b9b}
+  .dl-note{width:100%;font-size:12px;color:var(--muted)}
+
+  /* scoreboard */
+  .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;border-top:3px solid var(--pc,#4c8dff)}
+  .card h3{font-size:13px;letter-spacing:.4px;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .card h3 .lockic{margin-left:auto;font-size:12px;color:var(--gold)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--pc,#4c8dff)}
+  .statrow{display:flex;gap:18px;margin-top:8px;align-items:baseline}
+  .statrow .n{font-size:22px;font-weight:700} .statrow .l{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+  .lockedAt{font-size:11px;color:var(--faint);margin-top:6px}
+  .card.addcard{border:1px dashed var(--line);border-top:1px dashed var(--line);display:flex;align-items:center;justify-content:center;min-height:92px;cursor:pointer;color:var(--muted);font-weight:600;font-size:13.5px}
+  .card.addcard:hover{border-color:var(--faint);color:var(--ink)}
+
+  /* controls */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 14px}
+  .btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:8px 13px;border-radius:9px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{border-color:var(--faint)}
+  .btn.primary{background:#8f0707;border-color:var(--accent)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .who{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+  .who select{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:9px;font-size:13px;font-weight:600}
+
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:4px;flex-wrap:wrap}
+  .tabs button{background:none;border:none;color:var(--muted);padding:11px 15px;font-size:14.5px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent}
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 8px;font-size:12.5px;color:var(--muted)}
+  .filters .chipf{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:5px 11px;border-radius:20px;cursor:pointer}
+  .filters .chipf.on{background:var(--panel2);color:var(--ink);border-color:var(--faint)}
+  .switch{display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin-left:auto}
+  .switch input{accent-color:var(--value)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;color:var(--faint);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
+    padding:9px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg)}
+  td{padding:9px 10px;border-bottom:1px solid #142440;vertical-align:middle}
+  tr:hover td{background:#0d1c36}
+  .team{font-weight:600} .rk{color:var(--faint);font-size:11.5px;margin-right:6px}
+  .conf{color:var(--faint);font-size:11.5px}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .odds{font-variant-numeric:tabular-nums;color:var(--muted)}
+  .imp{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+  .juice{color:var(--faint);font-size:11px;display:block}
+
+  .lean{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px}
+  .lean .o{color:var(--over)} .lean .u{color:var(--under)}
+  .badge{font-size:10.5px;padding:2px 7px;border-radius:20px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+  .b-high{background:#12331d;color:#5ee27e} .b-med{background:#2a2f14;color:#d9d24e}
+  .b-lean{background:#16294a;color:#8ab4ff} .b-pass{background:#1a2438;color:#6b7c9c}
+  .val{background:#1b2b4d;color:#cfe0ff;border:1px solid #3d5a86}
+  .conf-note{color:var(--faint);font-size:11.5px;max-width:280px}
+
+  .pick{display:inline-flex;gap:4px}
+  .pick button{border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:5px 10px;border-radius:7px;cursor:pointer;font-weight:700;font-size:12px;min-width:34px}
+  .pick button:disabled{opacity:.45;cursor:not-allowed}
+  .pick button.sel-over{background:var(--over);color:#04160a;border-color:var(--over)}
+  .pick button.sel-under{background:var(--under);color:#1a0505;border-color:var(--under)}
+  .pickchips{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+  .pc{font-size:10px;padding:1px 6px;border-radius:5px;font-weight:700;border:1px solid transparent}
+
+  /* bet designation */
+  .betrow{display:flex;gap:5px;margin-top:5px;align-items:center;flex-wrap:wrap}
+  .betbtn{border:1px solid var(--line);background:var(--panel);color:var(--faint);padding:3px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700}
+  .betbtn.on{background:#3a2d0e;color:var(--gold);border-color:#6b5518}
+  .betbtn:disabled{opacity:.45;cursor:not-allowed}
+  .stake{width:72px;background:var(--bg);border:1px solid #6b5518;color:var(--gold);border-radius:6px;padding:3px 6px;font-size:11.5px;font-weight:700}
+  .betlock{font-size:11px;color:var(--gold);font-weight:700}
+  .lockbtn{border:1px solid #6b5518;background:#241c08;color:var(--gold);padding:3px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700}
+  .lockbtn:hover{background:#332809}
+
+  /* locked-in row highlight */
+  tr.lockedrow td{background:#211a0a}
+  tr.lockedrow:hover td{background:#282010}
+  tr.lockedrow td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+
+  /* weekly + history */
+  .gamecell .mt{font-weight:600}
+  .gamecell .dt{color:var(--faint);font-size:11.5px;margin-top:2px}
+  .plus{color:var(--over);font-weight:700} .minus{color:var(--under);font-weight:700}
+  .hsearch{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:7px 11px;border-radius:8px;font-size:12.5px;min-width:220px}
+  .hweeksel{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:7px 9px;border-radius:8px;font-size:12.5px}
+  .confbtn{background:transparent;border:1px solid var(--line);color:var(--ink);padding:3px 9px;border-radius:7px;font-size:11px;cursor:pointer;white-space:nowrap}
+  .confbtn:hover{border-color:#3fb950;color:#3fb950}
+  .confbtn.q{border-color:#e3b341;color:#e3b341}
+  .conf-in{color:#3fb950;font-size:11.5px;white-space:nowrap}
+  .confbar{display:flex;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;background:var(--panel);border:1px solid #e3b341;border-radius:10px;flex-wrap:wrap}
+  .confbar input{background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:7px 10px;border-radius:8px;font-size:12.5px}
+
+  /* submit-modal pick checklist */
+  .sublist{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px;padding:6px}
+  .subrow{display:flex;gap:8px;align-items:center;padding:5px 6px;font-size:12.5px;border-bottom:1px solid #142440;cursor:pointer}
+  .subrow:last-child{border-bottom:none}
+  .subrow input{accent-color:var(--gold)}
+  .subrow .sm{color:var(--faint);font-size:11px;margin-left:auto;white-space:nowrap}
+
+  .selbtn{border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:6px 10px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;text-align:left;width:100%}
+  .selbtn:disabled{opacity:.45;cursor:not-allowed}
+  .res{font-size:11px;color:var(--faint)}
+  .foot{color:var(--faint);font-size:12px;margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+  .foot b{color:var(--muted)}
+  .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:12px 14px;margin:14px 0;font-size:13px;color:var(--muted)}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal.on{display:flex}
+  .modal .inner{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:540px;width:100%;padding:20px}
+  .modal textarea{width:100%;height:240px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:12px;margin-top:10px}
+  .modal input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px;margin-top:10px}
+  .steps{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.7}
+  .hide{display:none!important}
+  @media(max-width:720px){.conf-note{display:none}.meta{gap:10px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🏈 2026 CFB Preseason Predictions Board</h1>
+    <div class="sub">Win totals · Heisman · National title — everyone's picks, locked and tracked all season.</div>
+    <div class="meta">
+      <span><b>Lines as of:</b> Aug 8, 2026 (consensus; books vary)</span>
+      <span><b>Season opens:</b> Week 0 — Aug 29</span>
+      <span><b>Commissioner:</b> Claude (picks are baked in &amp; timestamped — no edits after lock)</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="deadline" id="dlBanner">
+    <div>
+      <div class="dl-label" id="dlLabel">⏳ Preseason picks lock</div>
+      <div class="dl-time">Saturday, Aug 15, 2026 · 12:00 PM CT</div>
+    </div>
+    <div class="dl-count" id="dlCount">—</div>
+    <div class="dl-note">Lock any time: hit 🔒 <b>Lock</b> on a single pick or <b>Submit picks</b> for a batch, confirm, done — your picks are recorded straight to the commissioner ledger, timestamped by Google. Locks are <b>per-pick</b>: lock 5 now, the rest later; unlocked picks stay open until the deadline. Tag 💰 <b>Bet</b> + $ amount to have the money actually placed. Late = whatever you didn't lock doesn't count. <b>In-season:</b> game picks lock 30 min before kickoff — or submit early any time and it's locked the moment it's stamped, so bets can be placed on it.</div>
+  </div>
+
+  <div class="board" id="scoreBoard"></div>
+
+  <div class="controls">
+    <button class="btn" id="adoptBtn">⭐ Adopt model leans</button>
+    <button class="btn" id="clearBtn">Clear my picks</button>
+    <button class="btn primary" id="exportBtn">🔒 Submit picks</button>
+    <div class="who">
+      Picking as:
+      <select id="whoSel"></select>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="on" data-tab="wins">Win Totals</button>
+    <button data-tab="heisman">Heisman</button>
+    <button data-tab="title">National Title</button>
+    <button data-tab="card">Our Best Bets</button>
+    <button data-tab="weekly">Weekly Games</button>
+    <button data-tab="history">History &amp; Standings</button>
+  </div>
+
+  <!-- WIN TOTALS -->
+  <section id="tab-wins">
+    <div class="filters">
+      <span class="chipf on" data-conf="all">All</span>
+      <span class="chipf" data-conf="SEC">SEC</span>
+      <span class="chipf" data-conf="Big Ten">Big Ten</span>
+      <span class="chipf" data-conf="ACC">ACC</span>
+      <span class="chipf" data-conf="Big 12">Big 12</span>
+      <span class="chipf" data-conf="Ind/G5">ND / G5</span>
+      <label class="switch"><input type="checkbox" id="valOnly"> Value plays only</label>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Team</th><th class="num">O/U</th><th>Model lean</th><th>Conf.</th>
+        <th class="conf-note">Why</th><th>Your pick</th><th>Result</th>
+      </tr></thead>
+      <tbody id="winsBody"></tbody>
+    </table>
+  </section>
+
+  <!-- HEISMAN -->
+  <section id="tab-heisman" class="hide">
+    <div class="note">Awards markets are longshot-by-nature: even a great bet rarely clears 15–20% to win. We flag <b>value</b> where the number looks generous vs. the player's role, team quality, and path to New York. Our pick isn't the favorite — it's the best price-to-probability.</div>
+    <table>
+      <thead><tr>
+        <th>Player</th><th>Team</th><th class="num">Odds</th><th class="num">Implied</th>
+        <th>Our read</th><th>Pick</th><th>Result</th>
+      </tr></thead>
+      <tbody id="heisBody"></tbody>
+    </table>
+  </section>
+
+  <!-- TITLE -->
+  <section id="tab-title" class="hide">
+    <div class="note">Ohio State opens as a clear favorite defending the title. Books vary widely here (FanDuel American odds shown; prediction markets had Notre Dame/Texas nearer the top). Best value = live path to 12–0 relative to price.</div>
+    <table>
+      <thead><tr>
+        <th>Team</th><th class="num">Odds</th><th class="num">Implied</th>
+        <th>Our read</th><th>Pick</th><th>Result</th>
+      </tr></thead>
+      <tbody id="titleBody"></tbody>
+    </table>
+  </section>
+
+  <!-- BEST BETS -->
+  <section id="tab-card" class="hide">
+    <div class="note">Our highest-conviction plays across all three markets — the ones we'd actually stake. Confidence reflects analyst judgment (research + market read), not model output yet. <b>Juice matters:</b> e.g. Notre Dame U11.5 is −200 — the market already leans that way, so you're paying for the position.</div>
+    <table>
+      <thead><tr><th>Market</th><th>The bet</th><th class="num">Price</th><th>Conf.</th><th>Rationale</th></tr></thead>
+      <tbody id="cardBody"></tbody>
+    </table>
+  </section>
+
+  <!-- WEEKLY -->
+  <section id="tab-weekly" class="hide">
+    <div class="note" style="border-left-color:var(--accent)">
+      <b>Game picks close 30 minutes before kickoff</b> — after that the buttons grey out. Lock early any time: hit 🔒 <b>Lock</b> on a single pick (or <b>Submit picks</b> for a batch), confirm — done, it's in the ledger. Once baked it's committed, so the bet can be placed. Tag 💰 <b>Bet</b> + $ amount for real money. Each game has two picks: the spread and the total.
+    </div>
+    <div class="filters" id="weekChips"></div>
+    <table>
+      <thead><tr>
+        <th>Game</th><th class="num">Spread</th><th>Your spread pick</th>
+        <th class="num">O/U</th><th>Your total pick</th><th>Result<br><span style="font-weight:400">spr / tot</span></th>
+      </tr></thead>
+      <tbody id="weeklyBody"></tbody>
+    </table>
+    <div style="color:var(--faint);font-size:12px;margin-top:8px">Week 0 lines as of Aug 8, 2026 (consensus — books vary, re-shop before betting). Alabama A&amp;M–Howard (both FCS) not listed. Weeks 1+ drop when we load them.</div>
+  </section>
+
+  <!-- HISTORY & STANDINGS -->
+  <section id="tab-history" class="hide">
+    <h3 style="font-size:15px;margin:14px 0 2px">Standings</h3>
+    <div class="filters">
+      <span class="chipf hscope on" data-hs="all">All picks</span>
+      <span class="chipf hscope" data-hs="fut">Futures</span>
+      <span class="chipf hscope" data-hs="wk">Weekly</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Player</th><th class="num">Picks</th><th class="num">🔒</th><th class="num">W–L</th><th class="num">Win %</th>
+        <th class="num">💰 Bets</th><th class="num">Staked</th><th class="num">Settled</th><th class="num">Net $</th><th class="num">ROI</th>
+      </tr></thead>
+      <tbody id="standBody"></tbody>
+    </table>
+    <h3 style="font-size:15px;margin:24px 0 2px">Pick log</h3>
+    <div class="filters">
+      <input type="text" id="histSearch" class="hsearch" placeholder="Search team / player / market…">
+      <select id="histWeek" class="hweeksel"><option value="all">All weeks</option></select>
+      <span class="chipf hres on" data-hr="all">All</span>
+      <span class="chipf hres" data-hr="pending">Pending</span>
+      <span class="chipf hres" data-hr="win">Wins</span>
+      <span class="chipf hres" data-hr="loss">Losses</span>
+      <label class="switch"><input type="checkbox" id="histBet"> 💰 bets only</label>
+      <label class="switch"><input type="checkbox" id="histConf"> ✅ placed only</label>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Player</th><th>Type</th><th>Pick</th><th class="num">Odds</th><th class="num">💰 Stake</th><th>Placed</th><th>Status</th><th>Result</th><th class="num">P/L</th>
+      </tr></thead>
+      <tbody id="histBody"></tbody>
+    </table>
+    <div id="confBar" class="confbar" style="display:none">
+      <input type="text" id="confName" placeholder="Your name (who placed them?)" maxlength="24">
+      <button id="confSend" class="btn primary">✅ Send confirmations</button>
+      <span id="confNote" style="color:var(--faint);font-size:12px"></span>
+    </div>
+    <div style="color:var(--faint);font-size:12px;margin-top:8px">P/L is computed on 💰 bet-tagged picks only: futures at listed odds, win totals at posted juice (−110 where none shown), weekly spreads/totals at −110. Settled = bets with a graded result. Gold rows = locked.</div>
+
+    <h3 style="font-size:15px;margin:24px 0 2px">💵 Book ledger</h3>
+    <div style="color:var(--faint);font-size:12px;margin-bottom:6px">The running tab between each player and whoever places their bets — counts <b>✅-placed bets only</b>. To confirm: hit <b>✓ got it in</b> on each bet you placed, then <b>Send confirmations</b> (one click, goes to the commissioner ledger; Claude bakes it in so it shows for everyone). <b>Net</b> settles as results grade: positive = the book owes the player; negative = the player owes the book.</div>
+    <table>
+      <thead><tr>
+        <th>Player</th><th class="num">✅ Placed</th><th class="num">Staked</th><th class="num">Settled</th><th class="num">Pending</th><th class="num">Net $</th>
+      </tr></thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+  </section>
+
+  <div class="foot">
+    <p><b>How locking works (honest version).</b> This page can't stop anyone from clicking around — the real lock is the commissioner step. Your in-page picks are a scratchpad until you lock: hit 🔒 <b>Lock</b> on one pick or <b>Submit picks</b> for a batch and confirm — your picks are written to the commissioner ledger (a Google Sheet in John's Drive) with Google's server timestamp as the official clock, then Claude bakes them into this board permanently. Locks are <b>per-pick</b>: locked picks (🔒, gold rows) render read-only while the rest of your board stays open — lock more any time. A 💰 <b>Bet</b> tag with a $ amount means "actually place this bet"; it rides with the pick when it locks. Results get graded as the season plays out; no post-lock edits are accepted.</p>
+    <p style="margin-top:8px"><b>Sharing.</b> This board is a plain HTML file — no Claude account needed to play. Send the file to anyone and it opens in any browser; they add their name, make picks, and lock in with one click — no account, no app, no email.</p>
+    <p style="margin-top:8px"><b>Sourcing.</b> Win totals: Sports Betting Dime consensus, ND 11.5 cross-checked at BetMGM (O +150/U −200; first consensus 11.5 since 2023 Georgia) and Kalshi (~35¢ on 12-0). Heisman: Sports Betting Dime. National title: SI/FanDuel. AP rank: CFN projection. Lines move — re-shop before betting. <b>Model note:</b> leans are research + market blend; true model sims arrive once 2026 CFBD ingestion runs.</p>
+  </div>
+</div>
+
+<!-- SUBMIT MODAL -->
+<div class="modal" id="modal"><div class="inner">
+  <h3 style="margin-bottom:4px">🔒 Submit picks</h3>
+  <div class="steps">Check the picks to lock <b>now</b> — unchecked ones stay open for later. Hit <b>🔒 Lock picks</b> and you're done: your picks are recorded to the commissioner ledger with an official Google timestamp, then baked into this board — locked, no edits. (If sending fails, a pre-filled Google page opens: just hit Submit there.)</div>
+  <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+    <button class="btn" id="selAll" style="padding:4px 10px;font-size:11.5px">All</button>
+    <button class="btn" id="selNone" style="padding:4px 10px;font-size:11.5px">None</button>
+    <span id="subCount" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div class="sublist" id="subList"></div>
+  <textarea id="exportText" readonly style="height:170px"></textarea>
+  <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn primary" id="lockBtn">🔒 Lock picks</button>
+    <button class="btn" id="copyBtn">Copy</button>
+    <button class="btn" id="closeModal">Close</button>
+    <span id="subNote" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+</div></div>
+
+<!-- ADD PLAYER MODAL -->
+<div class="modal" id="addModal"><div class="inner">
+  <h3>Add a player</h3>
+  <div class="steps">Type your name, make picks under it, then Submit before the deadline.</div>
+  <input type="text" id="newName" maxlength="18" placeholder="Name">
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn primary" id="addConfirm">Add</button>
+    <button class="btn" id="addCancel">Cancel</button>
+  </div>
+</div></div>
+
+<script>
+// ================= CONFIG =================
+const DEADLINE = new Date('2026-08-15T17:00:00Z'); // Sat Aug 15, 2026, 12:00 PM CT
+// Picks baked in by the commissioner (Claude). Locks are PER-PICK — players may lock in batches (5 now, more later).
+// shape: { "Name": { color:"#4c8dff", picks:{
+//   "w:Indiana":      {v:"under", bet:true,  stake:100,  lockedAt:"2026-08-11T15:02:00Z"},
+//   "h:Julian Sayin": {v:1,       bet:false, stake:null, lockedAt:"2026-08-11T15:02:00Z"} } } }
+const LOCKED = {
+  // Claude plays too — the commissioner's own card, locked early & in full on
+  // Aug 8 so it can't drift. Preseason picks = the flagged best-value calls;
+  // in-season, Claude's Weekly Games picks come straight from the prediction
+  // engine's card (documented edges only), so the board tracks engine vs humans.
+  "Claude 🤖": { color:"#2dd4bf", picks:{
+    "w:Indiana":      {v:"under", bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
+    "w:Notre Dame":   {v:"under", bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
+    "w:Ohio State":   {v:"over",  bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
+    "h:Julian Sayin": {v:1,       bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
+    "t:Notre Dame":   {v:1,       bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"}
+  } }
+};
+const RESULTS = {}; // key -> 'win'|'loss' — graded by commissioner over the season
+// Bets confirmed as actually placed at the book. Baked by the commissioner from
+// "Send confirmations" submissions. shape: { "John": { "s:xxx": {by:"Danny", at:"ISO"} } }
+const CONFIRMED = {};
+
+const COLORS = ['#4c8dff','#ff8f3c','#3fb950','#a371f7','#ff6bb3','#2dd4bf','#e3b341','#f85149'];
+
+// ================= DATA =================
+const WINS = [
+  {t:"Notre Dame",c:"Ind/G5",ou:11.5,ap:3,lean:"under",conf:"med",value:true,juice:"O +150 / U −200",why:"Over needs 12–0. Verified: first consensus 11.5 since 2023 Georgia (BetMGM). Under is right but juiced to −200."},
+  {t:"Indiana",c:"Big Ten",ou:10.5,ap:4,lean:"under",conf:"high",value:true,why:"2025 was a breakout outlier; QB turns to Hoover and 10.5 bakes in a repeat that rarely holds."},
+  {t:"Texas Tech",c:"Big 12",ou:10.5,ap:9,lean:"under",conf:"lean",value:true,why:"Record portal spend, but 10.5 is a ceiling number for a program with no track record there."},
+  {t:"Miami",c:"ACC",ou:10.5,ap:7,lean:null,conf:"pass",value:false,why:"Mensah upgrade + soft ACC slate; fair number, no edge either way."},
+  {t:"Oregon",c:"Big Ten",ou:10.5,ap:2,lean:"over",conf:"lean",value:false,why:"Loaded roster, Moore back; 10.5 is gettable even in the Big Ten."},
+  {t:"Ohio State",c:"Big Ten",ou:9.5,ap:1,lean:"over",conf:"med",value:true,why:"Defending champ and title favorite with Sayin+Smith — 9.5 is low for a playoff team."},
+  {t:"Texas",c:"SEC",ou:9.5,ap:6,lean:null,conf:"pass",value:false,why:"Manning hype real but a brutal SEC slate caps the over; toss-up."},
+  {t:"Georgia",c:"SEC",ou:9.5,ap:5,lean:"over",conf:"lean",value:false,why:"Kirby floors around 10 wins; 9.5 is beatable most years."},
+  {t:"Alabama",c:"SEC",ou:8.5,ap:15,lean:"over",conf:"lean",value:false,why:"Talent gap vs. schedule still favors the over even in a down read."},
+  {t:"Michigan",c:"Big Ten",ou:8.5,ap:14,lean:null,conf:"pass",value:false,why:"QB questions vs. elite defense; fair at 8.5."},
+  {t:"Penn State",c:"Big Ten",ou:8.5,ap:16,lean:null,conf:"pass",value:false,why:"Roster says over, ceiling questions say push — no edge."},
+  {t:"USC",c:"Big Ten",ou:8.5,ap:17,lean:null,conf:"pass",value:false,why:"Fair line for a middle-of-Big-Ten profile."},
+  {t:"LSU",c:"SEC",ou:8.5,ap:11,lean:null,conf:"pass",value:false,why:"Nussmeier-era talent but SEC road games; priced right."},
+  {t:"Texas A&M",c:"SEC",ou:8.5,ap:8,lean:"over",conf:"lean",value:false,why:"Top-10 preseason profile makes 8.5 look a touch low."},
+  {t:"SMU",c:"ACC",ou:8.5,ap:null,lean:null,conf:"pass",value:false,why:"ACC contender, fair number."},
+  {t:"Louisville",c:"ACC",ou:8.5,ap:24,lean:null,conf:"pass",value:false,why:"Solid but unspectacular; no edge."},
+  {t:"Houston",c:"Big 12",ou:8.5,ap:null,lean:null,conf:"pass",value:false,why:"Big 12 wide open; 8.5 fair."},
+  {t:"BYU",c:"Big 12",ou:8.5,ap:13,lean:null,conf:"pass",value:false,why:"Overachieved recently; fair to slightly high."},
+  {t:"Kansas State",c:"Big 12",ou:8.5,ap:null,lean:"over",conf:"lean",value:false,why:"Veteran roster in an open Big 12; 8.5 reachable."},
+  {t:"Utah",c:"Big 12",ou:8.5,ap:18,lean:"over",conf:"lean",value:false,why:"Healthy QB + Whittingham; bounce-back over lives."},
+  {t:"Ole Miss",c:"SEC",ou:7.5,ap:10,lean:"over",conf:"lean",value:false,why:"Kiffin reloads; 7.5 light for a top-10 preseason team."},
+  {t:"Tennessee",c:"SEC",ou:7.5,ap:22,lean:null,conf:"pass",value:false,why:"QB reset caps the over; fair."},
+  {t:"Florida",c:"SEC",ou:7.5,ap:null,lean:"under",conf:"lean",value:false,why:"Brutal SEC schedule makes 8 wins a grind."},
+  {t:"Clemson",c:"ACC",ou:7.5,ap:25,lean:"over",conf:"lean",value:false,why:"Klubnik back in a soft ACC; 7.5 is low."},
+  {t:"NC State",c:"ACC",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Pittsburgh",c:"ACC",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Virginia",c:"ACC",ou:7.5,ap:null,lean:"under",conf:"lean",value:false,why:"7.5 rich for a middling ACC profile."},
+  {t:"Iowa",c:"Big Ten",ou:7.5,ap:20,lean:null,conf:"pass",value:false,why:"Iowa hovers right around this line yearly."},
+  {t:"Illinois",c:"Big Ten",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Arizona",c:"Big 12",ou:7.5,ap:21,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Oklahoma",c:"SEC",ou:7.5,ap:12,lean:"over",conf:"lean",value:false,why:"Top-12 preseason read vs. 7.5 leans over if QB holds."},
+  {t:"Boise State",c:"Ind/G5",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"MWC favorite; fair."},
+  {t:"Tulane",c:"Ind/G5",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"AAC contender; fair."},
+  {t:"Memphis",c:"Ind/G5",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"UNLV",c:"Ind/G5",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"East Carolina",c:"Ind/G5",ou:7.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Missouri",c:"SEC",ou:6.5,ap:23,lean:"over",conf:"lean",value:false,why:"Drinkwitz keeps overachieving 6.5-type lines."},
+  {t:"South Carolina",c:"SEC",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair after a QB step-back."},
+  {t:"Auburn",c:"SEC",ou:6.5,ap:null,lean:"over",conf:"lean",value:false,why:"Roster talent has underperformed the line for years — bet the talent."},
+  {t:"Florida State",c:"ACC",ou:6.5,ap:null,lean:"over",conf:"lean",value:false,why:"Bounce-back spot after a floor year; 6.5 low if it clicks."},
+  {t:"Georgia Tech",c:"ACC",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Virginia Tech",c:"ACC",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Minnesota",c:"Big Ten",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fleck floors near this number."},
+  {t:"Wisconsin",c:"Big Ten",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Oklahoma State",c:"Big 12",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Baylor",c:"Big 12",ou:6.5,ap:null,lean:"over",conf:"lean",value:false,why:"Sneaky Big 12 riser; 6.5 gettable."},
+  {t:"TCU",c:"Big 12",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Arizona State",c:"Big 12",ou:6.5,ap:null,lean:null,conf:"pass",value:false,why:"Regression watch after a big year; push."},
+  {t:"Vanderbilt",c:"SEC",ou:5.5,ap:null,lean:null,conf:"pass",value:false,why:"Career years hard to repeat; fair-to-low."},
+  {t:"Kansas",c:"Big 12",ou:5.5,ap:null,lean:"over",conf:"lean",value:false,why:"Talent says 6+ if health holds."},
+  {t:"Duke",c:"ACC",ou:5.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Wake Forest",c:"ACC",ou:5.5,ap:null,lean:null,conf:"pass",value:false,why:"New staff; fair."},
+  {t:"Northwestern",c:"Big Ten",ou:5.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Maryland",c:"Big Ten",ou:5.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Arkansas",c:"SEC",ou:4.5,ap:null,lean:"over",conf:"lean",value:false,why:"Talent/schedule says the under is thin at 4.5."},
+  {t:"Kentucky",c:"SEC",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair in a hard SEC."},
+  {t:"Mississippi State",c:"SEC",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Colorado",c:"Big 12",ou:4.5,ap:null,lean:"under",conf:"lean",value:false,why:"Post-Sanders-era talent drain; 4.5 may be high."},
+  {t:"Iowa State",c:"Big 12",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Rutgers",c:"Big Ten",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Michigan State",c:"Big Ten",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"North Carolina",c:"ACC",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Belichick year-2 wildcard; pass."},
+  {t:"Syracuse",c:"ACC",ou:4.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Purdue",c:"Big Ten",ou:3.5,ap:null,lean:"over",conf:"lean",value:false,why:"Rock-bottom line; any improvement clears 3.5."},
+  {t:"Boston College",c:"ACC",ou:3.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."},
+  {t:"Stanford",c:"ACC",ou:3.5,ap:null,lean:null,conf:"pass",value:false,why:"Fair."}
+];
+
+const HEIS = [
+  {p:"CJ Carr",t:"Notre Dame QB",odds:700,read:"Favorite off a strong debut; chalk, not value.",value:false},
+  {p:"Arch Manning",t:"Texas QB",odds:750,read:"Massive preseason hype priced in; needs volume stats early.",value:false},
+  {p:"Trinidad Chambliss",t:"Ole Miss QB",odds:1100,read:"Kiffin QBs put up numbers; solid but crowded tier.",value:false},
+  {p:"Julian Sayin",t:"Ohio State QB",odds:1150,read:"Best value on the board — QB1 of the title favorite with Jeremiah Smith outside. Team wins drive votes.",value:true},
+  {p:"Dante Moore",t:"Oregon QB",odds:1150,read:"Live if Oregon runs the Big Ten; fair price.",value:false},
+  {p:"Darian Mensah",t:"Miami QB",odds:1150,read:"Big stats likely on a soft slate; narrative risk if Miami slips.",value:false},
+  {p:"Jeremiah Smith",t:"Ohio State WR",odds:1300,read:"Generational, but non-QBs almost never win — longshot lotto only.",value:true},
+  {p:"Josh Hoover",t:"Indiana QB",odds:1350,read:"Numbers guy, but Indiana regression caps the ceiling.",value:false},
+  {p:"Gunner Stockton",t:"Georgia QB",odds:1700,read:"Kirby's offense + wins = sneaky, but needs a passing leap.",value:false},
+  {p:"Sam Leavitt",t:"LSU QB",odds:2350,read:"Talent + LSU spotlight; dark-horse price with a real path.",value:true},
+  {p:"Keelon Russell",t:"Alabama QB",odds:3125,read:"Freshman upside on a blue-blood; pure longshot dart.",value:false},
+  {p:"Malachi Toney",t:"Miami WR",odds:3275,read:"Position works against him; pass.",value:false}
+];
+
+const TITLE = [
+  {t:"Ohio State",odds:450,read:"Deserved favorite; little value at the price.",value:false},
+  {t:"Texas",odds:650,read:"Manning ceiling is real but the schedule is a gauntlet.",value:false},
+  {t:"Oregon",odds:650,read:"Best value in the top tier — loaded roster, gettable path.",value:true},
+  {t:"Georgia",odds:700,read:"Always live in January; fair.",value:false},
+  {t:"Penn State",odds:850,read:"Talent yes, QB/close-game questions temper it.",value:false},
+  {t:"Notre Dame",odds:1200,read:"No conference title game + a bye path to 12–0; overpriced here vs. prediction markets.",value:true},
+  {t:"Alabama",odds:1600,read:"Transition year read; longshot value if defense holds.",value:false},
+  {t:"Tennessee",odds:1800,read:"QB reset caps the ceiling; pass.",value:false},
+  {t:"Clemson",odds:1800,read:"Klubnik + soft ACC = cleanest path of the longshots.",value:true},
+  {t:"LSU",odds:2000,read:"Boom-or-bust; needs road wins.",value:false},
+  {t:"Ole Miss",odds:2300,read:"Kiffin dark horse; pass at this stage.",value:false},
+  {t:"Texas A&M",odds:3100,read:"Live in the SEC scrum; longshot only.",value:false},
+  {t:"Michigan",odds:3500,read:"Defense-first, QB-limited; pass.",value:false},
+  {t:"Miami",odds:4000,read:"Soft path but title résumé questions; small longshot.",value:false}
+];
+
+const BEST = [
+  {m:"Win total",bet:"Indiana UNDER 10.5",price:"—",conf:"high",why:"2025 was an outlier; new QB and a repeat baked into the number. Our top single-team lean."},
+  {m:"Win total",bet:"Notre Dame UNDER 11.5",price:"U −200",conf:"med",why:"Line verified at BetMGM. Right side, but −200 juice — you're paying for it; size accordingly."},
+  {m:"Win total",bet:"Ohio State OVER 9.5",price:"—",conf:"med",why:"Title favorite priced like a fringe playoff team; 9.5 is a low bar for this roster."},
+  {m:"Heisman",bet:"Julian Sayin +1150",price:"+1150",conf:"med",why:"QB1 of the title favorite with elite weapons; team wins + volume is the Heisman formula."},
+  {m:"National title",bet:"Notre Dame +1200",price:"+1200",conf:"lean",why:"Books lag prediction markets here; no CCG and a bye give a cleaner 12–0 path than the price implies."},
+  {m:"National title",bet:"Oregon +650",price:"+650",conf:"lean",why:"Most complete roster outside Columbus at a fair top-tier number."}
+];
+
+// Weekly slate. spread = HOME line (negative → home favored). kick = UTC; picks close kick − 30 min.
+// Week 0 lines: Aug 8, 2026 consensus (Cleatz), schedule cross-checked vs collegefootballschedule.net.
+const GAMES = [
+  {id:'w0-unc-tcu', wk:0,date:'Sat Aug 29',time:'11:00 AM CT',kick:'2026-08-29T16:00:00Z',away:'North Carolina',home:'TCU',        spread:-7.5, total:48.5,note:'Aviva Stadium, Dublin (neutral)'},
+  {id:'w0-sjsu-usc',wk:0,date:'Sat Aug 29',time:'2:00 PM CT', kick:'2026-08-29T19:00:00Z',away:'San Jose State',home:'USC',        spread:-38.5,total:60.5,note:''},
+  {id:'w0-ncst-uva',wk:0,date:'Sat Aug 29',time:'2:30 PM CT', kick:'2026-08-29T19:30:00Z',away:'NC State',home:'Virginia',         spread:-5.5, total:54.5,note:''},
+  {id:'w0-jsu-ndsu',wk:0,date:'Sat Aug 29',time:'4:30 PM CT', kick:'2026-08-29T21:30:00Z',away:'Jacksonville State',home:'North Dakota State',spread:-7.5,total:48.5,note:'at FCS NDSU'},
+  {id:'w0-sac-emu', wk:0,date:'Sat Aug 29',time:'5:30 PM CT', kick:'2026-08-29T22:30:00Z',away:'Sacramento State',home:'Eastern Michigan',spread:-8.5,total:53.5,note:'FCS opponent'},
+  {id:'w0-nmsu-fsu',wk:0,date:'Sat Aug 29',time:'6:00 PM CT', kick:'2026-08-29T23:00:00Z',away:'New Mexico State',home:'Florida State',spread:-31.5,total:52.5,note:''},
+  {id:'w0-haw-stan',wk:0,date:'Sat Aug 29',time:'6:00 PM CT', kick:'2026-08-29T23:00:00Z',away:'Hawaii',home:'Stanford',           spread:-4.5, total:50.5,note:''},
+  {id:'w0-mem-unlv',wk:0,date:'Sat Aug 29',time:'9:00 PM CT', kick:'2026-08-30T02:00:00Z',away:'Memphis',home:'UNLV',              spread:-6,   total:57.5,note:''}
+];
+
+// ================= STATE =================
+// Scratchpad (unlocked) picks. Pick shape: {v:'over'|'under'|'home'|'away'|1, bet:false, stake:null}
+// Locks are PER-PICK: lock one pick with its 🔒 button, or a batch via Submit picks.
+let sessionPlayers = {};   // name -> {color, picks:{}}
+let activeWho = null;
+
+function seedFromLocked(){ // every locked player also gets a session slot so they can keep picking open markets
+  Object.entries(LOCKED).forEach(([n,v])=>{ if(!sessionPlayers[n]) sessionPlayers[n]={color:v.color,picks:{}}; });
+}
+function lockedFor(n){ return (LOCKED[n]&&LOCKED[n].picks)||{}; }
+function sessFor(n){ return (sessionPlayers[n]&&sessionPlayers[n].picks)||{}; }
+function mergedFor(n){
+  const m={};
+  Object.entries(sessFor(n)).forEach(([k,p])=>m[k]=Object.assign({},p,{locked:false}));
+  Object.entries(lockedFor(n)).forEach(([k,p])=>m[k]=Object.assign({},p,{locked:true})); // locked wins
+  return m;
+}
+function isKeyLocked(n,k){ return !!lockedFor(n)[k]; }
+function hasLockedPrefix(n,prefix){ return Object.keys(lockedFor(n)).some(k=>k.startsWith(prefix)); }
+function colorFor(n){ return (LOCKED[n]&&LOCKED[n].color)||(sessionPlayers[n]&&sessionPlayers[n].color)||COLORS[0]; }
+function allNames(){
+  const s=Object.keys(LOCKED).slice();
+  Object.keys(sessionPlayers).forEach(n=>{ if(!LOCKED[n]) s.push(n); });
+  return s;
+}
+function allPlayers(){
+  return allNames().map(n=>{
+    const merged=mergedFor(n), lk=Object.keys(lockedFor(n));
+    let last=null; lk.forEach(k=>{ const la=lockedFor(n)[k].lockedAt; if(la&&(!last||la>last)) last=la; });
+    const open=Object.keys(sessFor(n)).filter(k=>!isKeyLocked(n,k)).length;
+    return {name:n,color:colorFor(n),merged,lockedCount:lk.length,openCount:open,lastLockedAt:last};
+  });
+}
+function deadlinePassed(){ return Date.now() > DEADLINE.getTime(); }
+function isWeeklyKey(k){ return k.startsWith('s:')||k.startsWith('o:'); }
+function gameForKey(k){ return GAMES.find(g=>g.id===k.slice(2)); }
+function keyOpenForPicking(k){ // time-based eligibility, ignoring locks
+  if(isWeeklyKey(k)){ const g=gameForKey(k); return !!g && Date.now() < new Date(g.kick).getTime()-30*60*1000; }
+  return !deadlinePassed(); // futures close at the preseason deadline
+}
+function canEdit(k){ return !!activeWho && keyOpenForPicking(k) && !isKeyLocked(activeWho,k); }
+function canPickFutures(){ return activeWho && !deadlinePassed(); }
+
+// ================= HELPERS =================
+function implied(american){ american=Number(american);
+  const p = american>0 ? 100/(american+100) : (-american)/(-american+100);
+  return (p*100).toFixed(1)+'%';
+}
+function fmtOdds(o){ return o>0?('+'+o):(''+o); }
+function fmtSpread(n){ return (n>0?'+':'')+n; }
+const badgeClass = {high:'b-high',med:'b-med',lean:'b-lean',pass:'b-pass'};
+const badgeLabel = {high:'High',med:'Medium',lean:'Lean',pass:'Pass'};
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function abbr(t){ const M={'North Carolina':'UNC','San Jose State':'SJSU','NC State':'NCST','Virginia':'UVA','Jacksonville State':'JVST','North Dakota State':'NDSU','Sacramento State':'SAC','Eastern Michigan':'EMU','New Mexico State':'NMSU','Florida State':'FSU','Hawaii':'HAW','Stanford':'STAN','Memphis':'MEM'};
+  if(M[t]) return M[t];
+  return t.includes(' ') ? t.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4) : t.toUpperCase().slice(0,6); }
+function describePick(key,p){
+  if(key.startsWith('w:')){ const t=key.slice(2), w=WINS.find(x=>x.t===t);
+    return {market:'Win total', text:(t+' '+(p.v==='over'?'OVER':'UNDER')+' '+(w?w.ou:'')).trim()};
+  }
+  if(key.startsWith('h:')){ const n=key.slice(2), h=HEIS.find(x=>x.p===n);
+    return {market:'Heisman', text:n+(h?' ('+fmtOdds(h.odds)+')':'')};
+  }
+  if(key.startsWith('t:')){ const n=key.slice(2), x=TITLE.find(y=>y.t===n);
+    return {market:'National title', text:n+(x?' ('+fmtOdds(x.odds)+')':'')};
+  }
+  const g=gameForKey(key);
+  if(!g) return {market:'Weekly', text:key};
+  if(key.startsWith('s:')){
+    const side = p.v==='home' ? g.home+' '+fmtSpread(g.spread) : g.away+' '+fmtSpread(-g.spread);
+    return {market:'Wk '+g.wk+' spread', text:side+' ('+abbr(g.away)+' @ '+abbr(g.home)+')'};
+  }
+  return {market:'Wk '+g.wk+' total', text:abbr(g.away)+' @ '+abbr(g.home)+' '+(p.v==='over'?'OVER':'UNDER')+' '+g.total};
+}
+function oddsFor(key,p){ // American odds used for P/L on 💰 bets
+  if(key.startsWith('h:')){ const h=HEIS.find(x=>x.p===key.slice(2)); return h?h.odds:null; }
+  if(key.startsWith('t:')){ const t=TITLE.find(x=>x.t===key.slice(2)); return t?t.odds:null; }
+  if(key.startsWith('w:')){ const w=WINS.find(x=>x.t===key.slice(2));
+    if(w&&w.juice){ const m=w.juice.replace(/−/g,'-').match(/O\s*([+-]\d+)\s*\/\s*U\s*([+-]\d+)/);
+      if(m) return p.v==='over'?Number(m[1]):Number(m[2]); }
+    return -110; }
+  return -110; // weekly spreads & totals
+}
+function profit(odds,stake){ return odds>0 ? stake*odds/100 : stake*100/(-odds); }
+function pickPL(key,p){ // net $ for settled 💰 bets; null if not a bet or still pending
+  if(!p.bet) return null;
+  const r=RESULTS[key]; if(!r) return null;
+  const stake=Number(p.stake)||0; if(!stake) return 0;
+  return r==='win' ? profit(oddsFor(key,p),stake) : -stake;
+}
+
+// ================= COUNTDOWN =================
+function tick(){
+  const el=document.getElementById('dlCount'), banner=document.getElementById('dlBanner');
+  const ms = DEADLINE.getTime()-Date.now();
+  if(ms<=0){ el.textContent='FUTURES CLOSED'; banner.classList.add('closed');
+    document.getElementById('dlLabel').textContent='🔒 Preseason futures are locked (weekly games stay open)';
+    document.getElementById('adoptBtn').disabled=true; document.getElementById('clearBtn').disabled=true;
+    return; }
+  const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5), m=Math.floor(ms%36e5/6e4), s=Math.floor(ms%6e4/1e3);
+  el.textContent = (d>0?d+'d ':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+setInterval(tick,1000); tick();
+
+// ================= SCOREBOARD =================
+function renderBoard(){
+  const bd=document.getElementById('scoreBoard'); bd.innerHTML='';
+  allPlayers().forEach(p=>{
+    const ks=Object.keys(p.merged);
+    const w=ks.filter(k=>RESULTS[k]==='win').length, l=ks.filter(k=>RESULTS[k]==='loss').length;
+    const betKeys=ks.filter(k=>p.merged[k].bet);
+    const staked=betKeys.reduce((s,k)=>s+(Number(p.merged[k].stake)||0),0);
+    const div=document.createElement('div'); div.className='card'; div.style.setProperty('--pc',p.color);
+    div.innerHTML=`<h3><span class="dot"></span>${esc(p.name)}${p.lockedCount?`<span class="lockic">🔒 ${p.lockedCount} locked</span>`:''}</h3>
+      <div class="statrow">
+        <div><div class="n">${ks.length}</div><div class="l">Picks</div></div>
+        <div><div class="n">${p.lockedCount}</div><div class="l">Locked</div></div>
+        <div><div class="n">${w}–${l}</div><div class="l">Record</div></div>
+        ${betKeys.length?`<div><div class="n">$${staked}</div><div class="l">${betKeys.length} bet${betKeys.length>1?'s':''}</div></div>`:''}
+      </div>
+      ${p.lastLockedAt
+        ?`<div class="lockedAt">last lock ${new Date(p.lastLockedAt).toLocaleString('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} CT${p.openCount?` · ${p.openCount} open (unsubmitted)`:''}</div>`
+        :`<div class="lockedAt">${ks.length?'unsubmitted — scratchpad':'no picks yet'}</div>`}`;
+    bd.appendChild(div);
+  });
+  const add=document.createElement('div'); add.className='card addcard'; add.textContent='+ Add player';
+  add.onclick=()=>{ document.getElementById('addModal').classList.add('on'); document.getElementById('newName').focus(); };
+  bd.appendChild(add);
+  // who selector
+  const sel=document.getElementById('whoSel'); const cur=activeWho; sel.innerHTML='';
+  const ps=allPlayers();
+  if(!ps.length){ sel.innerHTML='<option value="">— add a player —</option>'; activeWho=null; }
+  else{
+    ps.forEach(p=>{ const o=document.createElement('option'); o.value=p.name;
+      o.textContent=p.name+(p.lockedCount?` 🔒${p.lockedCount}`:''); sel.appendChild(o); });
+    activeWho = (cur && allNames().includes(cur)) ? cur : ps[0].name;
+    sel.value=activeWho;
+  }
+}
+document.getElementById('whoSel').onchange=e=>{ activeWho=e.target.value; renderAll(); };
+document.getElementById('addConfirm').onclick=()=>{
+  const n=document.getElementById('newName').value.trim();
+  if(!n) return;
+  if(allNames().includes(n)){ alert('That name is taken.'); return; }
+  sessionPlayers[n]={color:COLORS[allNames().length%COLORS.length],picks:{}};
+  activeWho=n; document.getElementById('newName').value='';
+  document.getElementById('addModal').classList.remove('on');
+  renderAll();
+};
+document.getElementById('addCancel').onclick=()=>document.getElementById('addModal').classList.remove('on');
+
+// ================= TABLES =================
+let confFilter='all', valOnly=false;
+function pickChips(key,label){
+  let s='';
+  allPlayers().forEach(p=>{
+    const pk=p.merged[key];
+    if(pk) s+=`<span class="pc" style="background:${p.color}22;color:${p.color};border-color:${p.color}55">${esc(p.name.slice(0,8))}: ${label(pk.v)}${pk.bet?' 💰':''}${pk.locked?' 🔒':''}</span>`;
+  });
+  return s;
+}
+function betControls(mine,key){
+  if(!mine) return '';
+  if(mine.locked) return mine.bet?`<div class="betrow"><span class="betlock">💰 BET${mine.stake?' $'+mine.stake:''} 🔒</span></div>`:'';
+  if(!canEdit(key)) return '';
+  return `<div class="betrow"><button class="betbtn ${mine.bet?'on':''}" data-bk="${key}" title="Flag this pick to actually be bet">💰 Bet</button>${mine.bet?`<input class="stake" data-sk="${key}" type="number" min="0" step="5" placeholder="$ amt" value="${mine.stake??''}">`:''}<button class="lockbtn" data-lock="${key}" title="Lock just this pick — get a one-pick card to send John">🔒 Lock</button></div>`;
+}
+function renderWins(){
+  const body=document.getElementById('winsBody'); body.innerHTML='';
+  const me = activeWho ? mergedFor(activeWho) : {};
+  WINS.filter(w=> (confFilter==='all'||w.c===confFilter) && (!valOnly||w.value)).forEach(w=>{
+    const key='w:'+w.t, mine=me[key];
+    const disabled = !canEdit(key);
+    const tr=document.createElement('tr');
+    if(activeWho&&isKeyLocked(activeWho,key)) tr.className='lockedrow';
+    const leanHtml = w.lean
+      ? `<span class="lean"><span class="${w.lean==='over'?'o':'u'}">${w.lean==='over'?'▲ OVER':'▼ UNDER'}</span></span>`
+      : `<span style="color:var(--faint)">— pass</span>`;
+    tr.innerHTML=`
+      <td><span class="team">${w.ap?`<span class="rk">#${w.ap}</span>`:''}${w.t}</span><div class="conf">${w.c}</div></td>
+      <td class="num">${w.ou}${w.juice?`<span class="juice">${w.juice}</span>`:''}</td>
+      <td>${leanHtml}${w.value?' <span class="badge val">VALUE</span>':''}</td>
+      <td><span class="badge ${badgeClass[w.conf]}">${badgeLabel[w.conf]}</span></td>
+      <td class="conf-note">${w.why}</td>
+      <td><div class="pick">
+        <button data-k="${key}" data-v="over" ${disabled?'disabled':''} class="${mine&&mine.v==='over'?'sel-over':''}">O</button>
+        <button data-k="${key}" data-v="under" ${disabled?'disabled':''} class="${mine&&mine.v==='under'?'sel-under':''}">U</button>
+        </div>${betControls(mine,key)}<div class="pickchips">${pickChips(key,v=>v==='over'?'O':'U')}</div></td>
+      <td class="res">${resultText(key)}</td>`;
+    body.appendChild(tr);
+  });
+  bindPickButtons('#winsBody');
+}
+function bindPickButtons(scope){
+  document.querySelectorAll(scope+' .pick button').forEach(b=>{
+    b.onclick=()=>{ if(!canEdit(b.dataset.k))return;
+      const pk=sessionPlayers[activeWho].picks, cur=pk[b.dataset.k];
+      if(cur&&cur.v===b.dataset.v) delete pk[b.dataset.k];
+      else if(cur) cur.v=b.dataset.v;
+      else pk[b.dataset.k]={v:b.dataset.v,bet:false,stake:null};
+      renderAll(); };
+  });
+}
+function singleRow(key,prefix){
+  const mine = activeWho ? mergedFor(activeWho)[key] : null;
+  const disabled = !canPickFutures() || (activeWho&&hasLockedPrefix(activeWho,prefix)) ;
+  const chips = pickChips(key, ()=> '✓');
+  return `<td><button class="selbtn" data-k="${key}" ${disabled?'disabled':''}>${chips||'Pick'}</button>${betControls(mine,key)}</td>`;
+}
+function renderHeis(){
+  const body=document.getElementById('heisBody'); body.innerHTML='';
+  HEIS.forEach(h=>{
+    const key='h:'+h.p; const tr=document.createElement('tr');
+    if(activeWho&&isKeyLocked(activeWho,key)) tr.className='lockedrow';
+    tr.innerHTML=`
+      <td class="team">${h.p}${h.value?' <span class="badge val">VALUE</span>':''}</td>
+      <td class="conf">${h.t}</td>
+      <td class="num odds">${fmtOdds(h.odds)}</td>
+      <td class="num imp">${implied(h.odds)}</td>
+      <td class="conf-note">${h.read}</td>
+      ${singleRow(key,'h:')}
+      <td class="res">${resultText(key)}</td>`;
+    body.appendChild(tr);
+  });
+  bindSingle('#heisBody','h:');
+}
+function renderTitle(){
+  const body=document.getElementById('titleBody'); body.innerHTML='';
+  TITLE.forEach(t=>{
+    const key='t:'+t.t; const tr=document.createElement('tr');
+    if(activeWho&&isKeyLocked(activeWho,key)) tr.className='lockedrow';
+    tr.innerHTML=`
+      <td class="team">${t.t}${t.value?' <span class="badge val">VALUE</span>':''}</td>
+      <td class="num odds">${fmtOdds(t.odds)}</td>
+      <td class="num imp">${implied(t.odds)}</td>
+      <td class="conf-note">${t.read}</td>
+      ${singleRow(key,'t:')}
+      <td class="res">${resultText(key)}</td>`;
+    body.appendChild(tr);
+  });
+  bindSingle('#titleBody','t:');
+}
+function bindSingle(sel,prefix){
+  document.querySelectorAll(sel+' .selbtn').forEach(btn=>{
+    btn.onclick=()=>{ if(!canPickFutures()||hasLockedPrefix(activeWho,prefix))return;
+      const pk=sessionPlayers[activeWho].picks;
+      const had = pk[btn.dataset.k];
+      Object.keys(pk).forEach(k=>{ if(k.startsWith(prefix)) delete pk[k]; });
+      if(!had) pk[btn.dataset.k]={v:1,bet:false,stake:null};
+      renderAll(); };
+  });
+}
+function bindBetControls(){
+  document.querySelectorAll('.betbtn').forEach(b=>{
+    b.onclick=e=>{ e.stopPropagation();
+      const pk=sessFor(activeWho), p=pk[b.dataset.bk]; if(!p||!canEdit(b.dataset.bk)) return;
+      p.bet=!p.bet; if(!p.bet) p.stake=null;
+      renderAll(); };
+  });
+  document.querySelectorAll('.stake').forEach(i=>{
+    i.onclick=e=>e.stopPropagation();
+    i.onchange=()=>{
+      const pk=sessFor(activeWho), p=pk[i.dataset.sk]; if(!p) return;
+      p.stake=i.value?Math.max(0,Number(i.value)):null;
+      renderAll(); };
+  });
+  document.querySelectorAll('.lockbtn').forEach(b=>{
+    b.onclick=e=>{ e.stopPropagation(); openSubmitFor([b.dataset.lock]); };
+  });
+}
+
+// ================= WEEKLY GAMES =================
+let wkSel=0;
+function renderWeekly(){
+  const chips=document.getElementById('weekChips'); chips.innerHTML='';
+  const weeks=[...new Set(GAMES.map(g=>g.wk))].sort((a,b)=>a-b);
+  weeks.forEach(w=>{ const s=document.createElement('span'); s.className='chipf'+(w===wkSel?' on':'');
+    s.textContent='Week '+w; s.onclick=()=>{ wkSel=w; renderWeekly(); bindBetControls(); }; chips.appendChild(s); });
+  const more=document.createElement('span'); more.style.cssText='color:var(--faint);font-size:11.5px;margin-left:6px';
+  more.textContent='Weeks 1+ load when we pull their lines (~3 weeks out)'; chips.appendChild(more);
+  const body=document.getElementById('weeklyBody'); body.innerHTML='';
+  const me=activeWho?mergedFor(activeWho):{};
+  GAMES.filter(g=>g.wk===wkSel).forEach(g=>{
+    const sk='s:'+g.id, ok='o:'+g.id, ms=me[sk], mo=me[ok];
+    const open=keyOpenForPicking(sk);
+    const sDis=!canEdit(sk), oDis=!canEdit(ok);
+    const tr=document.createElement('tr');
+    if(activeWho&&(isKeyLocked(activeWho,sk)||isKeyLocked(activeWho,ok))) tr.className='lockedrow';
+    tr.innerHTML=`
+      <td class="gamecell"><div class="mt">${g.away} @ ${g.home}</div><div class="dt">${g.date} · ${g.time}${g.note?' · '+g.note:''}${open?'':' · <b style="color:#ff9b9b">CLOSED</b>'}</div></td>
+      <td class="num">${abbr(g.home)} ${fmtSpread(g.spread)}</td>
+      <td><div class="pick">
+        <button data-k="${sk}" data-v="away" ${sDis?'disabled':''} class="${ms&&ms.v==='away'?'sel-over':''}">${abbr(g.away)} ${fmtSpread(-g.spread)}</button>
+        <button data-k="${sk}" data-v="home" ${sDis?'disabled':''} class="${ms&&ms.v==='home'?'sel-over':''}">${abbr(g.home)} ${fmtSpread(g.spread)}</button>
+        </div>${betControls(ms,sk)}<div class="pickchips">${pickChips(sk,v=>v==='home'?abbr(g.home):abbr(g.away))}</div></td>
+      <td class="num">${g.total}</td>
+      <td><div class="pick">
+        <button data-k="${ok}" data-v="over" ${oDis?'disabled':''} class="${mo&&mo.v==='over'?'sel-over':''}">O</button>
+        <button data-k="${ok}" data-v="under" ${oDis?'disabled':''} class="${mo&&mo.v==='under'?'sel-under':''}">U</button>
+        </div>${betControls(mo,ok)}<div class="pickchips">${pickChips(ok,v=>v==='over'?'O':'U')}</div></td>
+      <td class="res">${resultText(sk)}<br>${resultText(ok)}</td>`;
+    body.appendChild(tr);
+  });
+  bindPickButtons('#weeklyBody');
+}
+
+// ================= HISTORY & STANDINGS =================
+let histScope='all', histResult='all', histBetOnly=false, histSearch='';
+let histWeek='all', histConfOnly=false;
+// session-side confirmation queue: "player|key" -> 'queued' | 'sent'
+let sessionConfirms={};
+function inScope(k){ return histScope==='all' || (histScope==='wk' ? isWeeklyKey(k) : !isWeeklyKey(k)); }
+function weekOf(k){ if(!isWeeklyKey(k)) return null; const g=gameForKey(k); return g?g.wk:null; }
+function weekMatch(k){
+  if(histWeek==='all') return true;
+  if(histWeek==='fut') return !isWeeklyKey(k);
+  return weekOf(k)===Number(histWeek);
+}
+function confirmedBake(plName,k){ return (CONFIRMED[plName]&&CONFIRMED[plName][k])||null; }
+function confState(plName,k){
+  if(confirmedBake(plName,k)) return 'baked';
+  return sessionConfirms[plName+'|'+k]||null; // 'queued' | 'sent' | null
+}
+function populateWeekFilter(){
+  const sel=document.getElementById('histWeek'); if(!sel) return;
+  const weeks=[...new Set(GAMES.map(g=>g.wk))].sort((a,b)=>a-b);
+  sel.innerHTML='<option value="all">All weeks</option><option value="fut">Futures</option>'+
+    weeks.map(w=>`<option value="${w}">Week ${w}</option>`).join('');
+  sel.onchange=()=>{ histWeek=sel.value; renderHistory(); };
+}
+function fmtMoney(v){ return (v>=0?'+':'−')+'$'+Math.abs(v).toFixed(0); }
+function renderHistory(){
+  const sb=document.getElementById('standBody'); sb.innerHTML='';
+  allPlayers().forEach(pl=>{
+    const ks=Object.keys(pl.merged).filter(inScope);
+    const w=ks.filter(k=>RESULTS[k]==='win').length, l=ks.filter(k=>RESULTS[k]==='loss').length;
+    const lockedN=ks.filter(k=>isKeyLocked(pl.name,k)).length;
+    const bets=ks.filter(k=>pl.merged[k].bet);
+    const staked=bets.reduce((s,k)=>s+(Number(pl.merged[k].stake)||0),0);
+    const settled=bets.filter(k=>RESULTS[k]);
+    const settledStake=settled.reduce((s,k)=>s+(Number(pl.merged[k].stake)||0),0);
+    let net=0; settled.forEach(k=>{ const v=pickPL(k,pl.merged[k]); if(v!=null) net+=v; });
+    const winPct=(w+l)?Math.round(100*w/(w+l))+'%':'—';
+    const roi=settledStake?((net>=0?'+':'')+Math.round(100*net/settledStake)+'%'):'—';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><span class="dot" style="background:${pl.color};display:inline-block;margin-right:7px"></span><span class="team">${esc(pl.name)}</span></td>
+      <td class="num">${ks.length}</td><td class="num">${lockedN}</td>
+      <td class="num">${w}–${l}</td><td class="num">${winPct}</td>
+      <td class="num">${bets.length}</td><td class="num">$${staked}</td>
+      <td class="num">${settled.length}</td>
+      <td class="num ${net>0?'plus':net<0?'minus':''}">${fmtMoney(net)}</td>
+      <td class="num">${roi}</td>`;
+    sb.appendChild(tr);
+  });
+  // pick log
+  const hb=document.getElementById('histBody'); hb.innerHTML='';
+  const q=histSearch.toLowerCase();
+  const rows=[];
+  allPlayers().forEach(pl=>{
+    Object.entries(pl.merged).forEach(([k,p])=>{
+      if(!inScope(k)) return;
+      if(!weekMatch(k)) return;
+      if(histBetOnly&&!p.bet) return;
+      if(histConfOnly&&!(p.bet&&confState(pl.name,k))) return;
+      const r=RESULTS[k]||'pending';
+      if(histResult!=='all'&&r!==histResult) return;
+      const d=describePick(k,p);
+      if(q && !(pl.name+' '+d.market+' '+d.text).toLowerCase().includes(q)) return;
+      rows.push({pl,k,p,r,d});
+    });
+  });
+  if(!rows.length){ hb.innerHTML='<tr><td colspan="8" style="color:var(--faint);padding:16px 10px">Nothing matches — no picks yet, or filters too tight.</td></tr>'; return; }
+  rows.sort((a,b)=> (b.p.lockedAt||'')<(a.p.lockedAt||'')?-1:1);
+  rows.forEach(({pl,k,p,d})=>{
+    const odds=p.bet?oddsFor(k,p):null;
+    const pnl=pickPL(k,p);
+    const tr=document.createElement('tr'); if(p.locked) tr.className='lockedrow';
+    let placed='<span style="color:var(--faint)">—</span>';
+    if(p.bet){
+      const cs=confState(pl.name,k);
+      if(cs==='baked'){ const c=confirmedBake(pl.name,k);
+        placed=`<span class="conf-in" title="confirmed by ${esc(c.by||'?')}">✅ in${c.at?' · '+new Date(c.at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'}):''}</span>`; }
+      else if(cs==='sent') placed='<span class="conf-in">✅ sent</span>';
+      else if(cs==='queued') placed=`<button class="confbtn q" data-cp="${esc(pl.name)}" data-ck="${k}">✓ queued</button>`;
+      else placed=`<button class="confbtn" data-cp="${esc(pl.name)}" data-ck="${k}">✓ got it in</button>`;
+    }
+    tr.innerHTML=`<td><span class="dot" style="background:${pl.color};display:inline-block;margin-right:7px"></span>${esc(pl.name)}</td>
+      <td class="conf">${d.market}</td>
+      <td class="team" style="font-size:12.5px">${esc(d.text)}</td>
+      <td class="num odds">${odds!=null?fmtOdds(odds):'—'}</td>
+      <td class="num">${p.bet?(p.stake?'$'+p.stake:'TBD'):'—'}</td>
+      <td>${placed}</td>
+      <td style="font-size:12px">${p.locked?'🔒 locked':'<span style="color:var(--faint)">open</span>'}</td>
+      <td class="res">${resultText(k)}</td>
+      <td class="num ${pnl>0?'plus':pnl<0?'minus':''}">${pnl==null?'—':fmtMoney(pnl)}</td>`;
+    hb.appendChild(tr);
+  });
+  hb.querySelectorAll('.confbtn').forEach(b=>{
+    b.onclick=()=>{ const id=b.dataset.cp+'|'+b.dataset.ck;
+      if(sessionConfirms[id]==='queued') delete sessionConfirms[id]; else sessionConfirms[id]='queued';
+      renderHistory(); };
+  });
+  renderConfBar(); renderLedger();
+}
+function renderConfBar(){
+  const bar=document.getElementById('confBar'); if(!bar) return;
+  const queued=Object.entries(sessionConfirms).filter(([,v])=>v==='queued');
+  bar.style.display=queued.length?'flex':'none';
+  const btn=document.getElementById('confSend');
+  if(btn) btn.textContent=`✅ Send confirmations (${queued.length})`;
+}
+function renderLedger(){
+  const lb=document.getElementById('ledgerBody'); if(!lb) return; lb.innerHTML='';
+  let any=false;
+  allPlayers().forEach(pl=>{
+    const ks=Object.keys(pl.merged).filter(k=>pl.merged[k].bet&&confState(pl.name,k));
+    if(!ks.length) return; any=true;
+    const staked=ks.reduce((s,k)=>s+(Number(pl.merged[k].stake)||0),0);
+    const settled=ks.filter(k=>RESULTS[k]);
+    let net=0; settled.forEach(k=>{ const v=pickPL(k,pl.merged[k]); if(v!=null) net+=v; });
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><span class="dot" style="background:${pl.color};display:inline-block;margin-right:7px"></span><span class="team">${esc(pl.name)}</span></td>
+      <td class="num">${ks.length}</td><td class="num">$${staked}</td>
+      <td class="num">${settled.length}</td><td class="num">${ks.length-settled.length}</td>
+      <td class="num ${net>0?'plus':net<0?'minus':''}">${fmtMoney(net)}</td>`;
+    lb.appendChild(tr);
+  });
+  if(!any) lb.innerHTML='<tr><td colspan="6" style="color:var(--faint);padding:14px 10px">No confirmed bets yet — when the book hits "✓ got it in" and sends, the tab starts here.</td></tr>';
+}
+document.querySelectorAll('.hscope').forEach(c=>{ c.onclick=()=>{ document.querySelectorAll('.hscope').forEach(x=>x.classList.remove('on')); c.classList.add('on'); histScope=c.dataset.hs; renderHistory(); }; });
+document.querySelectorAll('.hres').forEach(c=>{ c.onclick=()=>{ document.querySelectorAll('.hres').forEach(x=>x.classList.remove('on')); c.classList.add('on'); histResult=c.dataset.hr; renderHistory(); }; });
+document.getElementById('histSearch').oninput=e=>{ histSearch=e.target.value; renderHistory(); };
+document.getElementById('histBet').onchange=e=>{ histBetOnly=e.target.checked; renderHistory(); };
+document.getElementById('histConf').onchange=e=>{ histConfOnly=e.target.checked; renderHistory(); };
+document.getElementById('confSend').onclick=async()=>{
+  const by=(document.getElementById('confName').value||'').trim();
+  const note=document.getElementById('confNote');
+  const queued=Object.entries(sessionConfirms).filter(([,v])=>v==='queued').map(([id])=>id);
+  if(!by){ note.textContent='Add your name first.'; return; }
+  if(!queued.length){ note.textContent='Nothing queued — hit "✓ got it in" on the bets you placed.'; return; }
+  const items=queued.map(id=>{ const i=id.indexOf('|'); const player=id.slice(0,i), key=id.slice(i+1);
+    const p=(mergedFor(player)||{})[key]||{};
+    return {player, key, stake:p.stake??null, text:describePick(key,p).text}; });
+  let txt='2026 CFB — BET CONFIRMATIONS\nplaced by: '+by+'\n'+new Date().toLocaleString('en-US',{timeZone:'America/Chicago'})+' CT\n\n';
+  items.forEach(it=>{ txt+=`  ✅ ${it.player}: ${it.text}${it.stake?' — $'+it.stake:''}\n`; });
+  const params=new URLSearchParams();
+  params.set(ENTRY.name, by+' (bet confirmations)');
+  params.set(ENTRY.picks, txt);
+  params.set(ENTRY.data, JSON.stringify({type:'confirm', by, clientTime:new Date().toISOString(), items}));
+  const btn=document.getElementById('confSend'); btn.disabled=true; btn.textContent='Sending…';
+  try{
+    await fetch(FORM_POST,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()});
+    queued.forEach(id=>sessionConfirms[id]='sent');
+    note.textContent='Sent to the commissioner ledger — shows as ✅ in for everyone after the next bake.';
+  }catch(e){
+    window.open(FORM_VIEW+'?usp=pp_url&'+params.toString(),'_blank');
+    queued.forEach(id=>sessionConfirms[id]='sent');
+    note.textContent='Direct send blocked — a Google page opened pre-filled: hit Submit there.';
+  }
+  btn.disabled=false; renderHistory();
+};
+
+function renderCard(){
+  const body=document.getElementById('cardBody'); body.innerHTML='';
+  BEST.forEach(b=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="conf">${b.m}</td>
+      <td class="team">${b.bet}</td>
+      <td class="num odds">${b.price}</td>
+      <td><span class="badge ${badgeClass[b.conf]}">${badgeLabel[b.conf]}</span></td>
+      <td class="conf-note" style="max-width:420px">${b.why}</td>`;
+    body.appendChild(tr);
+  });
+}
+function resultText(key){
+  if(RESULTS[key]==='win') return '<span style="color:var(--over)">✔ hit</span>';
+  if(RESULTS[key]==='loss') return '<span style="color:var(--under)">✘ miss</span>';
+  return 'pending';
+}
+
+// ================= CONTROLS =================
+document.querySelectorAll('.tabs button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    ['wins','heisman','title','card','weekly','history'].forEach(t=>document.getElementById('tab-'+t).classList.add('hide'));
+    document.getElementById('tab-'+b.dataset.tab).classList.remove('hide');
+  };
+});
+document.querySelectorAll('#tab-wins .chipf').forEach(c=>{
+  c.onclick=()=>{ document.querySelectorAll('#tab-wins .chipf').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    confFilter=c.dataset.conf; renderWins(); bindBetControls(); };
+});
+document.getElementById('valOnly').onchange=e=>{ valOnly=e.target.checked; renderWins(); bindBetControls(); };
+
+document.getElementById('adoptBtn').onclick=()=>{
+  if(!canPickFutures()){ alert('Add/select a player first (or futures are closed).'); return; }
+  const pk=sessionPlayers[activeWho].picks;
+  WINS.forEach(w=>{ const k='w:'+w.t; if(w.lean && !isKeyLocked(activeWho,k)) pk[k]={v:w.lean,bet:false,stake:null}; });
+  Object.keys(pk).forEach(k=>{ if(k.startsWith('h:')||k.startsWith('t:')) delete pk[k]; });
+  if(!hasLockedPrefix(activeWho,'h:')){ const hv=HEIS.find(h=>h.value); if(hv) pk['h:'+hv.p]={v:1,bet:false,stake:null}; }
+  if(!hasLockedPrefix(activeWho,'t:')){ const tv=TITLE.find(t=>t.value); if(tv) pk['t:'+tv.t]={v:1,bet:false,stake:null}; }
+  renderAll();
+};
+document.getElementById('clearBtn').onclick=()=>{
+  if(!activeWho) return;
+  sessionPlayers[activeWho].picks={}; renderAll(); // locked picks are untouched — only the scratchpad clears
+};
+
+// ================= SUBMIT (partial + single-pick locks) =================
+let submitOpen=[], submitSel={};
+function eligibleOpen(){
+  return Object.entries(sessFor(activeWho)).filter(([k])=>!isKeyLocked(activeWho,k)&&keyOpenForPicking(k));
+}
+function openSubmitFor(keys){
+  if(!activeWho) return;
+  const sess=sessFor(activeWho);
+  submitOpen = keys.filter(k=>sess[k]&&!isKeyLocked(activeWho,k)&&keyOpenForPicking(k)).map(k=>[k,sess[k]]);
+  submitSel={}; submitOpen.forEach(([k])=>submitSel[k]=true);
+  renderSubmitList(); buildCard();
+  document.getElementById('modal').classList.add('on');
+}
+document.getElementById('exportBtn').onclick=()=>{
+  if(!activeWho){ alert('Add a player first.'); return; }
+  submitOpen = eligibleOpen();
+  submitSel = {}; submitOpen.forEach(([k])=>submitSel[k]=true);
+  renderSubmitList(); buildCard();
+  document.getElementById('modal').classList.add('on');
+};
+function renderSubmitList(){
+  const lb=document.getElementById('lockBtn');
+  if(lb){ lb.disabled=false; lb.textContent='🔒 Lock picks'; }
+  const sn=document.getElementById('subNote'); if(sn) sn.textContent='';
+  const el=document.getElementById('subList'); el.innerHTML='';
+  if(!submitOpen.length){
+    const lc=Object.keys(lockedFor(activeWho)).length;
+    el.innerHTML=`<div style="padding:10px;color:var(--faint);font-size:12.5px">${lc?'No open picks — everything you\'ve picked is already locked 🔒.':'No picks yet — make some or hit "Adopt model leans".'}</div>`;
+  }
+  submitOpen.forEach(([k,p])=>{
+    const d=describePick(k,p);
+    const row=document.createElement('label'); row.className='subrow';
+    row.innerHTML=`<input type="checkbox" data-ck="${k}" ${submitSel[k]?'checked':''}>
+      <span>${esc(d.text)}</span>
+      <span class="sm">${d.market}${p.bet?` · 💰 ${p.stake?'$'+p.stake:'amt TBD'}`:''}</span>`;
+    el.appendChild(row);
+  });
+  el.querySelectorAll('input').forEach(c=>{ c.onchange=()=>{ submitSel[c.dataset.ck]=c.checked; updateSubCount(); buildCard(); }; });
+  updateSubCount();
+}
+function updateSubCount(){
+  const n=submitOpen.filter(([k])=>submitSel[k]).length;
+  document.getElementById('subCount').textContent = submitOpen.length ? `locking ${n} of ${submitOpen.length} open picks` : '';
+}
+document.getElementById('selAll').onclick=()=>{ submitOpen.forEach(([k])=>submitSel[k]=true); renderSubmitList(); buildCard(); };
+document.getElementById('selNone').onclick=()=>{ submitOpen.forEach(([k])=>submitSel[k]=false); renderSubmitList(); buildCard(); };
+function buildCard(){
+  const chosen=submitOpen.filter(([k])=>submitSel[k]);
+  const heldBack=eligibleOpen().length-chosen.length;
+  const lockedCount=Object.keys(lockedFor(activeWho)).length;
+  let out='2026 CFB PICKS — '+activeWho+'\n';
+  out+='submitted: '+new Date().toLocaleString('en-US',{timeZone:'America/Chicago'})+' CT\n';
+  out+=`LOCKING NOW: ${chosen.length} pick${chosen.length===1?'':'s'}`;
+  if(heldBack>0) out+=` · holding back ${heldBack} (still open)`;
+  if(lockedCount) out+=` · ${lockedCount} already locked 🔒`;
+  out+='\n\n';
+  const line=(k,p,txt)=>'  '+txt+(p.bet?`   💰 BET${p.stake?' $'+p.stake:' (amount TBD)'}`:'')+'\n';
+  const sec=(match,title)=>{
+    const rows=chosen.filter(([k])=>match(k));
+    if(rows.length){ out+=title+'\n'; rows.forEach(([k,p])=>{ out+=line(k,p,describePick(k,p).text); }); out+='\n'; }
+  };
+  sec(k=>k.startsWith('w:'),'WIN TOTALS');
+  sec(k=>k.startsWith('h:'),'HEISMAN');
+  sec(k=>k.startsWith('t:'),'NATIONAL TITLE');
+  sec(isWeeklyKey,'WEEKLY GAMES');
+  const bets=chosen.filter(([,p])=>p.bet);
+  if(bets.length){
+    const tot=bets.reduce((s,[,p])=>s+(Number(p.stake)||0),0);
+    out+=`💰 BETS TO PLACE (${bets.length})${tot?` — total $${tot}`:''}\n`;
+    bets.forEach(([k,p])=>{ const d=describePick(k,p); out+=`  ${d.text} — ${p.stake?'$'+p.stake:'amount TBD'}\n`; });
+    out+='\n';
+  }
+  if(!chosen.length) out+='(nothing selected to lock)\n\n';
+  out+='→ Recorded to the commissioner ledger. ONLY these picks get baked in (locked & timestamped). Anything held back stays open.';
+  document.getElementById('exportText').value=out;
+}
+// Commissioner ledger: Google Form -> Sheet (John's Drive). Google stamps submission time.
+const FORM_KEY='1FAIpQLSeJ2q7QBMe-1Yjp8chlTWBwNnTVke3Kf04trtzsw-yJkaiOvg';
+const FORM_POST='https://docs.google.com/forms/d/e/'+FORM_KEY+'/formResponse';
+const FORM_VIEW='https://docs.google.com/forms/d/e/'+FORM_KEY+'/viewform';
+const ENTRY={name:'entry.422769054',picks:'entry.786418785',data:'entry.172706359'};
+function lockParams(){
+  const chosen=submitOpen.filter(([k])=>submitSel[k]);
+  const picks={}; chosen.forEach(([k,p])=>{ picks[k]={v:p.v,bet:!!p.bet,stake:p.stake??null}; });
+  const params=new URLSearchParams();
+  params.set(ENTRY.name, activeWho||'');
+  params.set(ENTRY.picks, document.getElementById('exportText').value);
+  params.set(ENTRY.data, JSON.stringify({name:activeWho, clientTime:new Date().toISOString(), picks}));
+  return {params, count:chosen.length};
+}
+document.getElementById('lockBtn').onclick=async()=>{
+  const {params, count}=lockParams();
+  if(!count){ document.getElementById('subNote').textContent='Nothing selected to lock.'; return; }
+  const btn=document.getElementById('lockBtn');
+  btn.disabled=true; btn.textContent='Locking…';
+  try{
+    await fetch(FORM_POST,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()});
+    btn.textContent='✅ Locked';
+    document.getElementById('subNote').textContent='Recorded in the commissioner ledger — will show as 🔒 here after the next bake.';
+  }catch(e){
+    btn.textContent='🔒 Lock picks'; btn.disabled=false;
+    window.open(FORM_VIEW+'?usp=pp_url&'+params.toString(),'_blank');
+    document.getElementById('subNote').textContent='Direct send was blocked — a Google page opened with everything pre-filled: hit Submit there and you\'re locked.';
+  }
+};
+document.getElementById('closeModal').onclick=()=>document.getElementById('modal').classList.remove('on');
+document.getElementById('copyBtn').onclick=()=>{
+  const ta=document.getElementById('exportText'); ta.select(); document.execCommand('copy');
+  document.getElementById('copyBtn').textContent='Copied ✓';
+  setTimeout(()=>document.getElementById('copyBtn').textContent='Copy',1500);
+};
+
+// ================= INIT =================
+function renderAll(){ renderBoard(); renderWins(); renderHeis(); renderTitle(); renderWeekly(); renderHistory(); bindBetControls(); }
+seedFromLocked();
+if(!allNames().includes('John')) sessionPlayers['John']={color:COLORS[0],picks:{}};
+activeWho='John';
+populateWeekFilter();
+renderAll(); renderCard();
+</script>
+</body>
+</html>
