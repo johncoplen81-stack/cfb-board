@@ -365,6 +365,12 @@ const LOCKED = {
   // Aug 8 so it can't drift. Preseason picks = the flagged best-value calls;
   // in-season, Claude's Weekly Games picks come straight from the prediction
   // engine's card (documented edges only), so the board tracks engine vs humans.
+  "John": { color:"#4c8dff", picks:{
+    // Baked from the commissioner ledger (Google-stamped 3:54:42 PM CT Aug 8).
+    // Duplicate re-submits of the same pick deduped to the first stamp; John's
+    // earlier same-day submissions were declared test data and excluded.
+    "w:Notre Dame":   {v:"under", bet:true, stake:30, lockedAt:"2026-08-08T20:54:41Z"}
+  } },
   "Claude 🤖": { color:"#2dd4bf", picks:{
     "w:Indiana":      {v:"under", bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
     "w:Notre Dame":   {v:"under", bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
@@ -510,10 +516,43 @@ const GAMES = [
 let sessionPlayers = {};   // name -> {color, picks:{}}
 let activeWho = null;
 
+// ---- device persistence (browser storage, guarded — degrades to in-memory
+// where storage is unavailable). Two jobs:
+//   1. PENDING: picks you've locked that the commissioner hasn't baked yet —
+//      they show 🔒 immediately (with ⏳) and survive refresh ON THIS DEVICE.
+//      The Google-stamped ledger remains the official record; once a bake
+//      lands, the official entry replaces the pending one.
+//   2. Scratchpad autosave: unsubmitted picks survive refresh too.
+let PENDING = {};          // name -> {key: {v,bet,stake,bet,lockedAt,_pending:true}}
+const STORE_KEY='cfb26-board-state-v1';
+function _store(){ try{ const s=window.localStorage; s.getItem(STORE_KEY); return s; }catch(e){ return null; } }
+function saveState(){ const s=_store(); if(!s) return;
+  try{ s.setItem(STORE_KEY, JSON.stringify({players:sessionPlayers, pending:PENDING, confirms:sessionConfirms, who:activeWho})); }catch(e){} }
+function restoreState(){ const s=_store(); if(!s) return;
+  try{
+    const d=JSON.parse(s.getItem(STORE_KEY)||'{}');
+    if(d.players) sessionPlayers=d.players;
+    if(d.pending) PENDING=d.pending;
+    if(d.confirms) sessionConfirms=d.confirms;
+    if(d.who) activeWho=d.who;
+    // prune: anything now officially baked leaves PENDING and the scratchpad
+    Object.keys(PENDING).forEach(n=>{
+      const official=(LOCKED[n]&&LOCKED[n].picks)||{};
+      Object.keys(PENDING[n]).forEach(k=>{ if(official[k]) delete PENDING[n][k]; });
+      if(!Object.keys(PENDING[n]).length) delete PENDING[n];
+    });
+  }catch(e){}
+}
+
 function seedFromLocked(){ // every locked player also gets a session slot so they can keep picking open markets
   Object.entries(LOCKED).forEach(([n,v])=>{ if(!sessionPlayers[n]) sessionPlayers[n]={color:v.color,picks:{}}; });
 }
-function lockedFor(n){ return (LOCKED[n]&&LOCKED[n].picks)||{}; }
+function lockedFor(n){
+  const official=(LOCKED[n]&&LOCKED[n].picks)||{};
+  const pend={};
+  Object.entries(PENDING[n]||{}).forEach(([k,p])=>{ if(!official[k]) pend[k]=Object.assign({},p,{_pending:true}); });
+  return Object.assign(pend, official); // official always wins
+}
 function sessFor(n){ return (sessionPlayers[n]&&sessionPlayers[n].picks)||{}; }
 function mergedFor(n){
   const m={};
@@ -896,7 +935,7 @@ function renderHistory(){
       <td class="num odds">${odds!=null?fmtOdds(odds):'—'}</td>
       <td class="num">${p.bet?(p.stake?'$'+p.stake:'TBD'):'—'}</td>
       <td>${placed}</td>
-      <td style="font-size:12px">${p.locked?'🔒 locked':'<span style="color:var(--faint)">open</span>'}</td>
+      <td style="font-size:12px">${p.locked?(p._pending?'🔒 locked <span title="on this device — official after the commissioner bake">⏳</span>':'🔒 locked'):'<span style="color:var(--faint)">open</span>'}</td>
       <td class="res">${resultText(k)}</td>
       <td class="num ${pnl>0?'plus':pnl<0?'minus':''}">${pnl==null?'—':fmtMoney(pnl)}</td>`;
     hb.appendChild(tr);
@@ -906,7 +945,7 @@ function renderHistory(){
       if(sessionConfirms[id]==='queued') delete sessionConfirms[id]; else sessionConfirms[id]='queued';
       renderHistory(); };
   });
-  renderConfBar(); renderLedger();
+  renderConfBar(); renderLedger(); saveState();
 }
 function renderConfBar(){
   const bar=document.getElementById('confBar'); if(!bar) return;
@@ -1108,14 +1147,26 @@ document.getElementById('lockBtn').onclick=async()=>{
   if(!count){ document.getElementById('subNote').textContent='Nothing selected to lock.'; return; }
   const btn=document.getElementById('lockBtn');
   btn.disabled=true; btn.textContent='Locking…';
+  const lockLocally=()=>{  // instant 🔒 on this device; official bake replaces it
+    const now=new Date().toISOString();
+    const sess=sessFor(activeWho);
+    PENDING[activeWho]=PENDING[activeWho]||{};
+    submitOpen.filter(([k])=>submitSel[k]).forEach(([k,p])=>{
+      PENDING[activeWho][k]={v:p.v,bet:!!p.bet,stake:p.stake??null,lockedAt:now};
+      delete sess[k];
+    });
+    saveState(); renderAll();
+  };
   try{
     await fetch(FORM_POST,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()});
+    lockLocally();
     btn.textContent='✅ Locked';
-    document.getElementById('subNote').textContent='Recorded in the commissioner ledger — will show as 🔒 here after the next bake.';
+    document.getElementById('subNote').textContent='Locked 🔒 — shown immediately on this device; the commissioner bake makes it official for everyone (⏳ clears then).';
   }catch(e){
     btn.textContent='🔒 Lock picks'; btn.disabled=false;
     window.open(FORM_VIEW+'?usp=pp_url&'+params.toString(),'_blank');
-    document.getElementById('subNote').textContent='Direct send was blocked — a Google page opened with everything pre-filled: hit Submit there and you\'re locked.';
+    lockLocally();
+    document.getElementById('subNote').textContent='Direct send was blocked — a Google page opened pre-filled: hit Submit there. Your picks show 🔒 here meanwhile.';
   }
 };
 document.getElementById('closeModal').onclick=()=>document.getElementById('modal').classList.remove('on');
@@ -1126,10 +1177,12 @@ document.getElementById('copyBtn').onclick=()=>{
 };
 
 // ================= INIT =================
-function renderAll(){ renderBoard(); renderWins(); renderHeis(); renderTitle(); renderWeekly(); renderHistory(); bindBetControls(); }
+function renderAll(){ renderBoard(); renderWins(); renderHeis(); renderTitle(); renderWeekly(); renderHistory(); bindBetControls(); saveState(); }
 seedFromLocked();
+restoreState();          // device-side: pending locks + unsubmitted scratchpad survive refresh
+seedFromLocked();        // ensure every baked player still has a session slot after restore
 if(!allNames().includes('John')) sessionPlayers['John']={color:COLORS[0],picks:{}};
-activeWho='John';
+if(!activeWho || !allNames().includes(activeWho)) activeWho='John';
 populateWeekFilter();
 renderAll(); renderCard();
 </script>
