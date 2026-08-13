@@ -162,6 +162,7 @@
       <span><b>Lines as of:</b> Aug 8, 2026 (consensus; books vary)</span>
       <span><b>Season opens:</b> Week 0 — Aug 29</span>
       <span><b>Commissioner:</b> Claude (picks are baked in &amp; timestamped — no edits after lock)</span>
+      <span id="syncBadge" style="font-size:11.5px"></span>
     </div>
   </div>
 </header>
@@ -366,10 +367,25 @@ const LOCKED = {
   // in-season, Claude's Weekly Games picks come straight from the prediction
   // engine's card (documented edges only), so the board tracks engine vs humans.
   "John": { color:"#4c8dff", picks:{
-    // Baked from the commissioner ledger (Google-stamped 3:54:42 PM CT Aug 8).
-    // Duplicate re-submits of the same pick deduped to the first stamp; John's
-    // earlier same-day submissions were declared test data and excluded.
-    "w:Notre Dame":   {v:"under", bet:true, stake:30, lockedAt:"2026-08-08T20:54:41Z"}
+    // Baked from the commissioner ledger (Google-stamped). Dedupe rule: each
+    // pick keeps its FIRST stamp. Aug 8 pre-3:30PM-CT submissions were John's
+    // declared test data and are excluded; everything below is official.
+    "w:Notre Dame":   {v:"under", bet:true,  stake:30,   lockedAt:"2026-08-08T20:54:41Z"},
+    "w:Texas A&M":    {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-08T21:00:08Z"},
+    // Full futures card, submitted 8:23-8:28 PM CT Aug 12:
+    "w:Texas Tech":   {v:"over",  bet:false, stake:null, lockedAt:"2026-08-13T01:23:50Z"},
+    "w:BYU":          {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Texas":        {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Georgia":      {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Alabama":      {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Louisville":   {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:LSU":          {v:"over",  bet:false, stake:null, lockedAt:"2026-08-13T01:23:50Z"},
+    "w:USC":          {v:"over",  bet:false, stake:null, lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Penn State":   {v:"over",  bet:false, stake:null, lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Oklahoma":     {v:"over",  bet:true,  stake:30,   lockedAt:"2026-08-13T01:23:50Z"},
+    "w:Miami":        {v:"under", bet:false, stake:null, lockedAt:"2026-08-13T01:23:50Z"},
+    "t:Texas":        {v:1,       bet:true,  stake:30,   lockedAt:"2026-08-13T01:25:03Z"},
+    "h:Arch Manning": {v:1,       bet:true,  stake:30,   lockedAt:"2026-08-13T01:27:55Z"}
   } },
   "Claude 🤖": { color:"#2dd4bf", picks:{
     "w:Indiana":      {v:"under", bet:false, stake:null, lockedAt:"2026-08-08T19:45:00Z"},
@@ -383,6 +399,79 @@ const RESULTS = {}; // key -> 'win'|'loss' — graded by commissioner over the s
 // Bets confirmed as actually placed at the book. Baked by the commissioner from
 // "Send confirmations" submissions. shape: { "John": { "s:xxx": {by:"Danny", at:"ISO"} } }
 const CONFIRMED = {};
+
+// ================= LIVE LEDGER SYNC =================
+// The page reads the commissioner ledger (the Google Sheet the form writes to)
+// directly on load and every 60s, so a Submit is LIVE for everyone within
+// seconds — no bake needed for locks/confirmations. The commissioner rules run
+// in-browser: test rows excluded, duplicate submissions keep their FIRST
+// stamp, weekly-game locks after (kick − 30min) don't count. The sheet's
+// Google timestamp remains the authority for disputes. If the fetch fails
+// (sheet not link-shared, offline), the page falls back to the baked-in state.
+const LEDGER_SHEET_ID = '1wMkIeu547kOYylxNfKSxF8bZsLyJnmiJrt7TK_0ppEw';
+const LEDGER_URL = 'https://docs.google.com/spreadsheets/d/' + LEDGER_SHEET_ID + '/gviz/tq?tqx=out:json';
+const BAKE_IGNORE_BEFORE = { 'John': '2026-08-08T20:30:00Z' }; // declared test data
+let LIVE = { locked:{}, confirmed:{}, syncedAt:null, error:null };
+
+function keyEverLockable(k, t){
+  if(!isWeeklyKey(k)) return true;
+  const g = gameForKey(k); if(!g) return false;
+  return t <= new Date(new Date(g.kick).getTime() - 30*60*1000).toISOString();
+}
+function applyLedger(rows){
+  const locked={}, confirmed={};
+  rows.forEach(r=>{
+    let d; try{ d = JSON.parse(r.dataStr); }catch(e){ return; }
+    if(!d || !d.name || d.test) return;
+    const name = String(d.name).trim();
+    if(!name || /^TEST/i.test(name)) return;
+    const t = d.clientTime || '';
+    if(BAKE_IGNORE_BEFORE[name] && (!t || t < BAKE_IGNORE_BEFORE[name])) return;
+    if(d.type === 'confirm' && Array.isArray(d.items)){
+      d.items.forEach(it=>{
+        if(!it.player || !it.key) return;
+        confirmed[it.player] = confirmed[it.player] || {};
+        if(!confirmed[it.player][it.key]) confirmed[it.player][it.key] = {by:d.by||name, at:t};
+      });
+      return;
+    }
+    if(!d.picks) return;
+    Object.entries(d.picks).forEach(([k,p])=>{
+      if(!p || !keyEverLockable(k, t)) return;
+      locked[name] = locked[name] || {};
+      if(!locked[name][k]) locked[name][k] = {v:p.v, bet:!!p.bet, stake:p.stake??null, lockedAt:t}; // FIRST stamp wins
+    });
+  });
+  LIVE.locked = locked; LIVE.confirmed = confirmed; LIVE.syncedAt = new Date();
+}
+async function syncLedger(){
+  try{
+    const res = await fetch(LEDGER_URL, {cache:'no-store'});
+    const txt = await res.text();
+    const json = JSON.parse(txt.substring(txt.indexOf('(')+1, txt.lastIndexOf(')')));
+    const rows = (json.table.rows||[]).map(r=>({
+      name: (r.c && r.c[1] && r.c[1].v) || '',
+      dataStr: (r.c && r.c[3] && r.c[3].v) || ''
+    })).filter(r=>r.dataStr);
+    applyLedger(rows);
+    LIVE.error = null;
+  }catch(e){ LIVE.error = String(e); }
+  if(typeof renderAll === 'function'){ renderAll(); }
+  renderSyncBadge();
+}
+function renderSyncBadge(){
+  const el = document.getElementById('syncBadge'); if(!el) return;
+  if(LIVE.syncedAt){
+    el.innerHTML = '<span style="color:#3fb950">●</span> live — synced ' +
+      LIVE.syncedAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) +
+      ' <a href="#" id="syncNow" style="color:var(--faint)">refresh</a>';
+  } else {
+    el.innerHTML = '<span style="color:#e3b341">●</span> live sync unavailable — showing last baked state' +
+      (LIVE.error ? '' : '') + ' <a href="#" id="syncNow" style="color:var(--faint)">retry</a>';
+  }
+  const a = document.getElementById('syncNow');
+  if(a) a.onclick = (e)=>{ e.preventDefault(); syncLedger(); };
+}
 
 const COLORS = ['#4c8dff','#ff8f3c','#3fb950','#a371f7','#ff6bb3','#2dd4bf','#e3b341','#f85149'];
 
@@ -548,7 +637,9 @@ function seedFromLocked(){ // every locked player also gets a session slot so th
   Object.entries(LOCKED).forEach(([n,v])=>{ if(!sessionPlayers[n]) sessionPlayers[n]={color:v.color,picks:{}}; });
 }
 function lockedFor(n){
-  const official=(LOCKED[n]&&LOCKED[n].picks)||{};
+  // official = baked-in state overlaid by the LIVE ledger (ledger wins);
+  // pending = this device's just-locked picks, until the ledger shows them.
+  const official=Object.assign({}, (LOCKED[n]&&LOCKED[n].picks)||{}, (LIVE.locked&&LIVE.locked[n])||{});
   const pend={};
   Object.entries(PENDING[n]||{}).forEach(([k,p])=>{ if(!official[k]) pend[k]=Object.assign({},p,{_pending:true}); });
   return Object.assign(pend, official); // official always wins
@@ -562,10 +653,15 @@ function mergedFor(n){
 }
 function isKeyLocked(n,k){ return !!lockedFor(n)[k]; }
 function hasLockedPrefix(n,prefix){ return Object.keys(lockedFor(n)).some(k=>k.startsWith(prefix)); }
-function colorFor(n){ return (LOCKED[n]&&LOCKED[n].color)||(sessionPlayers[n]&&sessionPlayers[n].color)||COLORS[0]; }
+function colorFor(n){
+  return (LOCKED[n]&&LOCKED[n].color)
+      || (sessionPlayers[n]&&sessionPlayers[n].color)
+      || COLORS[Math.max(0,allNames().indexOf(n)) % COLORS.length];
+}
 function allNames(){
   const s=Object.keys(LOCKED).slice();
-  Object.keys(sessionPlayers).forEach(n=>{ if(!LOCKED[n]) s.push(n); });
+  Object.keys(LIVE.locked||{}).forEach(n=>{ if(!s.includes(n)) s.push(n); });
+  Object.keys(sessionPlayers).forEach(n=>{ if(!s.includes(n)) s.push(n); });
   return s;
 }
 function allPlayers(){
@@ -861,7 +957,10 @@ function weekMatch(k){
   if(histWeek==='fut') return !isWeeklyKey(k);
   return weekOf(k)===Number(histWeek);
 }
-function confirmedBake(plName,k){ return (CONFIRMED[plName]&&CONFIRMED[plName][k])||null; }
+function confirmedBake(plName,k){
+  return (LIVE.confirmed&&LIVE.confirmed[plName]&&LIVE.confirmed[plName][k])
+      || (CONFIRMED[plName]&&CONFIRMED[plName][k]) || null;
+}
 function confState(plName,k){
   if(confirmedBake(plName,k)) return 'baked';
   return sessionConfirms[plName+'|'+k]||null; // 'queued' | 'sent' | null
@@ -1160,8 +1259,9 @@ document.getElementById('lockBtn').onclick=async()=>{
   try{
     await fetch(FORM_POST,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()});
     lockLocally();
+    setTimeout(syncLedger, 4000);   // ledger usually has it within seconds -> ⏳ clears
     btn.textContent='✅ Locked';
-    document.getElementById('subNote').textContent='Locked 🔒 — shown immediately on this device; the commissioner bake makes it official for everyone (⏳ clears then).';
+    document.getElementById('subNote').textContent='Locked 🔒 — live for everyone within seconds (the page reads the ledger directly).';
   }catch(e){
     btn.textContent='🔒 Lock picks'; btn.disabled=false;
     window.open(FORM_VIEW+'?usp=pp_url&'+params.toString(),'_blank');
@@ -1185,6 +1285,20 @@ if(!allNames().includes('John')) sessionPlayers['John']={color:COLORS[0],picks:{
 if(!activeWho || !allNames().includes(activeWho)) activeWho='John';
 populateWeekFilter();
 renderAll(); renderCard();
+// live ledger: sync now, then every 60s; prune this device's pending locks
+// once the ledger confirms them
+syncLedger();
+setInterval(syncLedger, 60000);
+const _origApply = applyLedger;
+applyLedger = function(rows){
+  _origApply(rows);
+  Object.keys(PENDING).forEach(n=>{
+    const off = LIVE.locked[n]||{};
+    Object.keys(PENDING[n]).forEach(k=>{ if(off[k]) delete PENDING[n][k]; });
+    if(!Object.keys(PENDING[n]).length) delete PENDING[n];
+  });
+  saveState();
+};
 </script>
 </body>
 </html>
